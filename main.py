@@ -1,58 +1,53 @@
-import requests
-import os
-
-from streamlit_ace import st_ace
 import streamlit as st
-from git import Repo
 
 from llm import LLM
 
 st.set_page_config(layout="wide")
 
-model = LLM()
+if 'llm' not in st.session_state:
+    st.session_state.llm = LLM(ask_for_confirmation=False, model='gpt-4')  # Replace with your actual LLM initialization logic
+
+model = st.session_state.llm
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 if "repo_url" not in st.session_state:
     st.session_state["repo_url"] = None
+if "repo_author" not in st.session_state:
+    st.session_state["repo_author"] = None
+if "repo_name" not in st.session_state:
+    st.session_state["repo_name"] = None
 
 def process_text():
     user_input = st.session_state["text"]
     clear_text()
     if user_input == 'help':
-        st.session_state["messages"].append('BOT: Once you have loaded a repo, you can ask the chatbot questions about the code.')
+        st.session_state["messages"].append('System: Once you have loaded a repo, you can ask the chatbot questions about the code.')
     else:
-        
+        response = model.ask(user_input)
+        st.session_state["messages"].append('CodeLLM:\n\n' + response)
 
 def clear_text():
-    st.session_state["messages"].append('YOU: ' + st.session_state["text"])
+    st.session_state["messages"].append('You:\n\n' + st.session_state["text"])
     st.session_state["text"] = ''
 
 def get_repo(url=None, author=None, name=None):
     if url is not None:
         st.session_state['repo_url'] = url
-        st.session_state['repo_author'] = url.split('/')[3].split('.')[0]
-        st.session_state['repo_name'] = url.split('/')[4]
-        st.session_state["messages"].append(f'BOT: Loading repo {st.session_state["repo_name"]} from URL')
-        
+        st.session_state['repo_author'] = url.split('/')[3]
+        st.session_state['repo_name'] = url.split('/')[4].split('.')[0]
+        st.session_state["messages"].append(f'System: Loading repo {st.session_state["repo_name"]} from URL')
     elif author is not None and name is not None:
         st.session_state['repo_author'] = author
         st.session_state['repo_name'] = name
         st.session_state['repo_url'] = f'https://github.com/{author}/{name}.git'
-        st.session_state["messages"].append(f'BOT: Loading repo {name} from Author: ' + author )
+        st.session_state["messages"].append(f'System: Loading repo {name} from Author: ' + author )
     else:
-        st.session_state["messages"].append('BOT: Please specify either a URL or an Author and Name')
+        st.session_state["messages"].append('System: Please specify either a URL or an Author and Name')
         return
     
-    repo = Repo.clone_from(repo_url, os.path.dirname(__file__))
-    model.set_repo()
-
-st.title('Context Aware Code LLM')
-
-for item in st.session_state["messages"]:
-    st.write(item)
-input = st.text_input("Input window", key="text", on_change=process_text)
-
+    model.set_repo(st.session_state['repo_url'])
+    st.session_state["messages"].append(f'System: Repo loaded successfully')
 
 with st.sidebar:
     with st.expander("Set Repo by URL"):
@@ -65,22 +60,14 @@ with st.sidebar:
         if st.button("Load", key='load_by_author_name'):
             get_repo(author=repo_author, name=repo_name)
 
+if st.session_state['repo_url'] is None:
+    st.title('Context Aware Code LLM', help='Select a Repository to Load')
+else:
+    st.title(f'Context Aware Code LLM', help=f'Repository: {st.session_state["repo_author"]}/{st.session_state["repo_name"]}')
 
-
-@st.cache_data()
-def get_github_content(user, repo, path=''):
-    url = f'https://api.github.com/repos/{user}/{repo}/contents/{path}'
-    response = requests.get(url)
-    return response.json()
-
-def print_directory_structure(user, repo, path=''):
-    contents = get_github_content(user, repo, path)
-    for item in contents:
-        if item['type'] == 'dir':
-            st.write(f'Directory: {item["path"]}')
-            print_directory_structure(user, repo, item['path'])
-        else:
-            st.write(f'File: {item["path"]}')
+for item in st.session_state["messages"]:
+    st.write(item)
+input = st.text_input("Input window", key="text", on_change=process_text)
 
 
 
