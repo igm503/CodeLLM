@@ -197,7 +197,14 @@ class LLM():
         self.filter_model = 'gpt-3.5-turbo-16k'
         self.main_model = model
 
+        self.running_cost = 0
+
         self.get_confirm = ask_for_confirmation
+        self.has_key = False
+    
+    def set_api_key(self, api_key):
+        openai.api_key = api_key
+        self.has_key = True
 
     def set_repo(self, repo_url):
         self.repo_url = repo_url
@@ -215,34 +222,36 @@ class LLM():
         #if filtered_candidates is None:
         #    return 'No relevant code blocks found'
         final_prompt = self.generate_main_prompt(candidates, prompt)
+        price_estimate = self.estimate_price(final_prompt, self.main_model)
         if self.get_confirm:
-            confirm = input(f'Continue to ask the chat model? \n Estimated Price: {self.estimate_price(final_prompt, self.main_model)} (y/n)')
+            confirm = input(f'Continue to ask the chat model? \n Estimated Price: {price_estimate} (y/n)')
         else:
             confirm = 'y'
         if confirm != 'y':
             print('Request not submitted')
             return
+        self.running_cost += price_estimate 
         response = openai.ChatCompletion.create(
             model=self.main_model,
             messages=final_prompt
         ) 
-        print(response['choices'][0]['message']['content'])
         return response['choices'][0]['message']['content']
 
     def filter_candidates(self, candidates, prompt):
         filter_prompt = self.generate_filter_prompt(candidates, prompt)
+        price_estimate = self.estimate_price(filter_prompt, self.filter_model)
         if self.get_confirm:
-            confirm = input(f'Continue with candidate filtering? \n Estimated Price: {self.estimate_price(filter_prompt, self.filter_model)} (y/n)')
+            confirm = input(f'Continue with candidate filtering? \n Estimated Price: {price_estimate} (y/n)')
         else:
             confirm = 'y'
         if confirm != 'y':
             print('Request not submitted')
             return
+        self.running_cost += price_estimate
         response = openai.ChatCompletion.create(
             model=self.filter_model,
             messages=filter_prompt
         )
-        print(response['choices'][0]['message']['content'])
         items = response['choices'][0]['message']['content'].split('\n')
         choices = []
         for item in items:
