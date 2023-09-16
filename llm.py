@@ -121,10 +121,13 @@ class RepoEmbedder():
     DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
     def __init__(self, repo_url: str, repo_name: str, get_confirm=True):
+
         self.get_confirm = get_confirm
         self.repo_name = repo_name     
         self.data_dir = os.path.join(RepoEmbedder.DIR, self.repo_name)
         
+        if not os.path.isdir(RepoEmbedder.DIR):
+            os.mkdir(RepoEmbedder.DIR)
         if not os.path.isdir(self.data_dir):
             os.mkdir(self.data_dir)
 

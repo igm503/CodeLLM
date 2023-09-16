@@ -4,7 +4,7 @@ from llm import LLM
 st.set_page_config(layout="wide")
 
 if 'llm' not in st.session_state:
-    st.session_state.llm = LLM(ask_for_confirmation=False)  # Replace with your actual LLM initialization logic
+    st.session_state.llm = LLM(ask_for_confirmation=False)
 
 model = st.session_state.llm
 
@@ -28,6 +28,8 @@ def process_text():
         st.session_state["messages"].append('#### System:\nOnce you have loaded a repo, you can ask the chatbot questions about the code.\n')
     elif st.session_state['repo_url'] is None:
         st.session_state["messages"].append('#### System:\nPlease load a repo first\n') 
+    elif not model.has_key:
+        st.session_state["messages"].append('#### System:\nPlease set an access key first\n')
     else:
         response = model.ask(user_input)
         st.session_state["messages"].append('#### CodeLLM:\n' + response + '\n')
@@ -36,12 +38,22 @@ def clear_text():
     st.session_state["messages"].append('#### You:\n' + st.session_state["text"] + '\n')
     st.session_state["text"] = ''
 
+def reset_repo_info():
+    st.session_state['repo_url'] = None
+    st.session_state['repo_author'] = None
+    st.session_state['repo_name'] = None
+
 def get_repo(url=None, author=None, name=None):
     if url is not None:
-        st.session_state['repo_url'] = url
-        st.session_state['repo_author'] = url.split('/')[3]
-        st.session_state['repo_name'] = url.split('/')[4].split('.')[0]
-        st.session_state["messages"].append(f'System: Loading repo {st.session_state["repo_name"]} from URL')
+        try:
+            st.session_state['repo_url'] = url
+            st.session_state['repo_author'] = url.split('/')[3]
+            st.session_state['repo_name'] = url.split('/')[4].split('.')[0]
+            st.session_state["messages"].append(f'#### System:\nLoading repo {st.session_state["repo_name"]} from URL {url}\n')
+        except:
+            st.session_state["messages"].append(f'#### System:\n"{url}" is an invalid url\n')
+            reset_repo_info()
+            return
     elif author is not None and name is not None:
         st.session_state['repo_author'] = author
         st.session_state['repo_name'] = name
@@ -50,8 +62,12 @@ def get_repo(url=None, author=None, name=None):
     else:
         st.session_state["messages"].append('#### System:\nPlease specify either a URL or an Author and Name\n')
         return
-    
-    model.set_repo(st.session_state['repo_url'])
+    try: 
+        model.set_repo(st.session_state['repo_url'])
+    except:
+        st.session_state["messages"].append(f'#### System:\nFailed to fetch "https://github.com/{author}/{name}.git"\n')
+        reset_repo_info()
+        return
     st.session_state["messages"].append(f'#### System:\nRepo loaded successfully\n')
 
 with st.sidebar:
@@ -72,13 +88,13 @@ with st.sidebar:
             access_key = st.text_input("Access Key", type="password")
             if st.button("Submit"):
                 if access_key != '':
-                    model.set_access_key(access_key)
+                    model.set_api_key(access_key)
                     st.session_state["messages"].append(f'#### System:\nAccess Key Changed Successfully\n')
     else:
         access_key = st.text_input("Access Key", type="password")
         if st.button("Submit"):
             if access_key != '':
-                model.set_access_key(access_key)
+                model.set_api_key(access_key)
                 st.session_state["messages"].append(f'#### System:\nAccess Key Set Successfully\n')
 
     st.write('## Estimated Cost')
@@ -91,7 +107,7 @@ else:
 
 for item in st.session_state["messages"]:
     st.write(item)
-    
+
 input = st.text_input("Input", key="text", on_change=process_text)
 
 
