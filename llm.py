@@ -217,7 +217,9 @@ class LLM():
 
     def ask(self, prompt):
         candidates = self.repo_embeddings.search_repo(prompt)
-        ### Currently inconsistent ###
+
+        ### Currently unhelpful ###
+
         #filtered_candidates = self.filter_candidates(candidates, prompt)
         #if filtered_candidates is None:
         #    return 'No relevant code blocks found'
