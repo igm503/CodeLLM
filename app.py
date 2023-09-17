@@ -25,11 +25,11 @@ def process_text():
     user_input = st.session_state["text"]
     clear_text()
     if user_input == 'help':
-        st.session_state["messages"].append('#### System:\nOnce you have loaded a repo, you can ask the chatbot questions about the code.\n')
-    elif st.session_state['repo_url'] is None:
-        st.session_state["messages"].append('#### System:\nPlease load a repo first\n') 
+        st.session_state["messages"].append('#### System:\nEnter an OpenAI API key, specify a repo, and then ask the chatbot questions about the code.\n')
     elif not model.has_key:
         st.session_state["messages"].append('#### System:\nPlease set an access key first\n')
+    elif st.session_state['repo_url'] is None:
+        st.session_state["messages"].append('#### System:\nPlease load a repo first\n') 
     else:
         response = model.ask(user_input)
         st.session_state["messages"].append('#### CodeLLM:\n' + response + '\n')
@@ -90,8 +90,13 @@ with st.sidebar:
             if access_key != '':
                 model.set_api_key(access_key)
                 st.session_state["messages"].append(f'#### System:\nAccess Key Set Successfully\n')
-
-    st.write("## Set Repository")
+    
+    if st.session_state['repo_url'] is None:
+        st.write("## Set Repository")
+    else:
+        st.write("## Repository")
+        st.write(f'{st.session_state["repo_author"]}/{st.session_state["repo_name"]}')
+        st.write("## Change Repository")
     with st.expander("Set Repo by URL"):
         repo_url = st.text_input("Repository URL", value="")
         if st.button("Load", key='load_by_url'):
@@ -101,9 +106,13 @@ with st.sidebar:
         repo_name = st.text_input("Repository Name", value="")
         if st.button("Load", key='load_by_author_name'):
             get_repo(author=repo_author, name=repo_name)
+    
+    st.write("## Set LLM Model")
+    model_name = model_name = st.selectbox("Model", ["GPT-3.5", "GPT-4"], index=0)
+    model.set_main_model(model_name)
 
     st.write('## Estimated Cost')
-    st.write(f'${model.running_cost:.2f} USD')
+    st.write(f'${model.get_running_cost():.2f} USD')
 
 if st.session_state['repo_url'] is None:
     st.title('Repository Aware Code LLM', help='Select a Repository to Load')

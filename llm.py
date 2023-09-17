@@ -10,13 +10,15 @@ from tree_sitter import Language, Parser
 import tiktoken
 from git import Repo
 
-EMBEDDING_PRICE = {
+MODEL_INPUT_PRICE = {
     'text-embedding-ada-002': 0.0001,
-}
-
-CHAT_PRICE = {
     'gpt-3.5-turbo-16k': 0.003,
     'gpt-4': 0.06,
+}
+
+MODEL_OUTPUT_PRICE = {
+    'gpt-3.5-turbo-16k': 0.004,
+    'gpt-4': 0.12,
 }
 
 ENDINGS = ['.py']
@@ -139,6 +141,8 @@ class RepoEmbedder():
         self.code = None
         self.embeddings = None
 
+        self.running_cost = 0
+
         self.engine = "text-embedding-ada-002"
 
     def load_code(self):
@@ -155,13 +159,15 @@ class RepoEmbedder():
 
     def generate_embeddings(self):
         text_list = self.code['code'].tolist()
+        cost = self.estimate_price(text_list)
         if self.get_confirm:
-            confirm = input(f"Embeddings not found. Would you like to generate {len(self.code)} embeddings? \n Estimated Cost: {self.estimate_price(text_list)} (y/n)")
+            confirm = input(f"Embeddings not found. Would you like to generate {len(self.code)} embeddings? \n Estimated Cost: {cost} (y/n)")
         else:
             confirm = 'y'
         if confirm != 'y':
-            print('Exiting...')
-            exit()
+            print('No Embeddings Generated')
+            return
+        self.running_cost += cost
         embedding_list = []
         print('Generating embeddings...')
 
@@ -178,7 +184,7 @@ class RepoEmbedder():
         query = np.array(get_embedding(prompt, engine=self.engine))
         candidate_indices = self.filter_embeddings(query, k=k)
         candidates = self.code.iloc[candidate_indices]
-        print(len(candidate_indices))
+        self.running_cost += self.estimate_price([prompt])
         return candidates
 
     def filter_embeddings(self, query, k=20):
@@ -190,24 +196,34 @@ class RepoEmbedder():
     
     def estimate_price(self, text):
         encoding = tiktoken.encoding_for_model(self.engine)
-        text = ('\n').join(text)
-        text = encoding.encode(text)
-        return len(text) / 1000 * EMBEDDING_PRICE[self.engine]
+        tokens = []
+        for t in text:
+            tokens += encoding.encode(t)
+        return len(tokens) / 1000 * MODEL_INPUT_PRICE[self.engine]
 
 
 class LLM():
-    def __init__(self, ask_for_confirmation=True, model='gpt-3.5-turbo-16k'):
-        self.filter_model = 'gpt-3.5-turbo-16k'
-        self.main_model = model
-
-        self.running_cost = 0
-
+    def __init__(self, ask_for_confirmation=True, filter_with_llm=False, model='gpt-3.5-turbo-16k'):
         self.get_confirm = ask_for_confirmation
+        self.main_model = model
+        self.filter_with_llm = filter_with_llm
+        self.filter_model = 'gpt-3.5-turbo-16k'
+        self.running_cost = 0
         self.has_key = False
+
+        self.repo_embeddings = None
     
     def set_api_key(self, api_key):
         openai.api_key = api_key
         self.has_key = True
+    
+    def set_main_model(self, model_name):
+        if 'GPT-3.5' in model_name:
+            self.main_model = 'gpt-3.5-turbo-16k'
+        elif 'GPT-4' in model_name:
+            self.main_model = 'gpt-4'
+        else:
+            self.main_model = 'gpt-3.5-turbo-16k'
 
     def set_repo(self, repo_url):
         self.repo_url = repo_url
@@ -221,11 +237,12 @@ class LLM():
     def ask(self, prompt):
         candidates = self.repo_embeddings.search_repo(prompt)
 
-        ### Currently unhelpful ###
-
-        #filtered_candidates = self.filter_candidates(candidates, prompt)
-        #if filtered_candidates is None:
-        #    return 'No relevant code blocks found'
+        if self.filter_with_llm:
+        ### Currently not as helpful ###
+            candidates = self.filter_candidates(candidates, prompt)
+            if candidates is None:
+                return 'No relevant code blocks found'
+        
         final_prompt = self.generate_main_prompt(candidates, prompt)
         price_estimate = self.estimate_price(final_prompt, self.main_model)
         if self.get_confirm:
@@ -240,6 +257,7 @@ class LLM():
             model=self.main_model,
             messages=final_prompt
         ) 
+        self.running_cost += self.estimate_price([response['choices'][0]['message']], self.main_model, output=True)
         return response['choices'][0]['message']['content']
 
     def filter_candidates(self, candidates, prompt):
@@ -266,6 +284,7 @@ class LLM():
                     choices.append(int(num))
             except:
                 continue
+        self.running_cost += self.estimate_price([response['choices'][0]['message']], self.filter_model, output=True)
 
         filtered_candidates = [candidates.iloc[i] for i in choices]
 
@@ -415,12 +434,20 @@ TORCH_IMPL_FUNC(digamma_out_mps)(const Tensor& self, const Tensor& output_) {{
         formatted_code_blocks = '\n\n'.join(formatted_code_list)
         return formatted_code_blocks
 
-    def estimate_price(self, messages, engine):
+    def estimate_price(self, messages, engine, output=False):
         encoder = tiktoken.encoding_for_model(engine)
-        text = []
+        tokens = []
         for message in messages:
-            text += encoder.encode(message['content'])
-            return len(text) / 1000 * CHAT_PRICE[engine]
+            tokens += encoder.encode(message['content'])
+        if output:
+            return len(tokens) / 1000 * MODEL_OUTPUT_PRICE[engine]
+        else:
+            return len(tokens) / 1000 * MODEL_INPUT_PRICE[engine]
+
+    def get_running_cost(self):
+        if self.repo_embeddings is None:
+            return self.running_cost
+        return self.running_cost + self.repo_embeddings.running_cost
 
 if __name__ == '__main__':
     openai.api_key = os.getenv("OPENAI_API_KEY")
