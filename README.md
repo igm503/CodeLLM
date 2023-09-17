@@ -19,6 +19,10 @@ After you add an OpenAI API key and specify a github repo, the program will clon
 git clone https://github.com/igm503/CodeLLM.git
 cd CodeLLM
 ```
+- Initialize Tree-Sitter-Python submodule
+```
+git submodule update --init
+```
 
 ### Run Directly with Streamlit 
 
