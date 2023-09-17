@@ -44,6 +44,10 @@ def reset_repo_info():
     st.session_state['repo_name'] = None
 
 def get_repo(url=None, author=None, name=None):
+    if not model.has_key:
+        st.session_state["messages"].append('#### System:\nPlease set an access key first\n')
+        return
+    
     if url is not None:
         try:
             st.session_state['repo_url'] = url
@@ -71,16 +75,6 @@ def get_repo(url=None, author=None, name=None):
     st.session_state["messages"].append(f'#### System:\nRepo loaded successfully\n')
 
 with st.sidebar:
-    st.write("## Set Repository")
-    with st.expander("Set Repo by URL"):
-        repo_url = st.text_input("Repository URL", value="")
-        if st.button("Load", key='load_by_url'):
-            get_repo(url=repo_url)
-    with st.expander("Set Repo by Author and Name"):
-        repo_author = st.text_input("Repository Author", value="")
-        repo_name = st.text_input("Repository Name", value="")
-        if st.button("Load", key='load_by_author_name'):
-            get_repo(author=repo_author, name=repo_name)
 
     st.write("## Set Access Key")
     if model.has_key:
@@ -96,6 +90,17 @@ with st.sidebar:
             if access_key != '':
                 model.set_api_key(access_key)
                 st.session_state["messages"].append(f'#### System:\nAccess Key Set Successfully\n')
+
+    st.write("## Set Repository")
+    with st.expander("Set Repo by URL"):
+        repo_url = st.text_input("Repository URL", value="")
+        if st.button("Load", key='load_by_url'):
+            get_repo(url=repo_url)
+    with st.expander("Set Repo by Author and Name"):
+        repo_author = st.text_input("Repository Author", value="")
+        repo_name = st.text_input("Repository Name", value="")
+        if st.button("Load", key='load_by_author_name'):
+            get_repo(author=repo_author, name=repo_name)
 
     st.write('## Estimated Cost')
     st.write(f'${model.running_cost:.2f} USD')
