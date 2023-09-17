@@ -1,127 +1,139 @@
 import streamlit as st
+
 from llm import LLM
 
-st.set_page_config(layout="wide")
-
-if 'llm' not in st.session_state:
-    st.session_state.llm = LLM(ask_for_confirmation=False)
-
-model = st.session_state.llm
-
-if "cost" not in st.session_state:
-    st.session_state["cost"] = 0
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
-if "repo_url" not in st.session_state:
-    st.session_state["repo_url"] = None
-if "repo_author" not in st.session_state:
-    st.session_state["repo_author"] = None
-if "repo_name" not in st.session_state:
-    st.session_state["repo_name"] = None
-if "access_key" not in st.session_state:
-    st.session_state["access_key"] = None
+def create_message(text, author):
+    message = f'#### {author}:\n{text}\n'
+    st.session_state.messages.append(message)
 
 def process_text():
-    user_input = st.session_state["text"]
+    user_input = st.session_state.text
     clear_text()
     if user_input == 'help':
-        st.session_state["messages"].append('#### System:\nEnter an OpenAI API key, specify a repo, and then ask the chatbot questions about the code.\n')
-    elif not model.has_key:
-        st.session_state["messages"].append('#### System:\nPlease set an access key first\n')
-    elif st.session_state['repo_url'] is None:
-        st.session_state["messages"].append('#### System:\nPlease load a repo first\n') 
+        create_message('Enter an OpenAI API key, specify a repo, and then ask the chatbot questions about the code.', 'System')
+    elif not st.session_state.llm.has_key:
+        create_message('Please set an access key first', 'System')
+    elif st.session_state.repo_url is None:
+        create_message('Please load a repo first', 'System')
     else:
-        response = model.ask(user_input)
-        st.session_state["messages"].append('#### CodeLLM:\n' + response + '\n')
+        response = st.session_state.llm.ask(user_input)
+        create_message(response, 'CodeLLM')
 
 def clear_text():
-    st.session_state["messages"].append('#### You:\n' + st.session_state["text"] + '\n')
-    st.session_state["text"] = ''
+    create_message(st.session_state.text, 'You')
+    st.session_state.text = ''
 
 def reset_repo_info():
-    st.session_state['repo_url'] = None
-    st.session_state['repo_author'] = None
-    st.session_state['repo_name'] = None
+    st.session_state.repo_url = None
+    st.session_state.repo_author = None
+    st.session_state.repo_name = None
 
 def get_repo(url=None, author=None, name=None):
-    if not model.has_key:
-        st.session_state["messages"].append('#### System:\nPlease set an access key first\n')
+    if not st.session_state.llm.has_key:
+        create_message('Please set an access key first', 'System')
         return
-    
     if url is not None:
         try:
-            st.session_state['repo_url'] = url
-            st.session_state['repo_author'] = url.split('/')[3]
-            st.session_state['repo_name'] = url.split('/')[4].split('.')[0]
-            st.session_state["messages"].append(f'#### System:\nLoading repo {st.session_state["repo_name"]} from URL {url}\n')
+            st.session_state.repo_url = url
+            st.session_state.repo_author = url.split('/')[3]
+            st.session_state.repo_name = url.split('/')[4].split('.')[0]
+            create_message(f'Loading repo {st.session_state.repo_name} from URL {url}', 'System')
         except:
-            st.session_state["messages"].append(f'#### System:\n"{url}" is an invalid url\n')
+            create_message(f'"{url}" is an invalid url', 'System')
             reset_repo_info()
             return
     elif author is not None and name is not None:
-        st.session_state['repo_author'] = author
-        st.session_state['repo_name'] = name
-        st.session_state['repo_url'] = f'https://github.com/{author}/{name}.git'
-        st.session_state["messages"].append(f'#### System:\nLoading repo {name} from ' + author + '\n')
+        st.session_state.repo_author = author
+        st.session_state.repo_name = name
+        st.session_state.repo_url = f'https://github.com/{author}/{name}.git'
+        create_message(f'Loading repo {name} from {author}', 'System')
     else:
-        st.session_state["messages"].append('#### System:\nPlease specify either a URL or an Author and Name\n')
+        create_message('Please specify either a URL or an Author and Name', 'System')
         return
     try: 
-        model.set_repo(st.session_state['repo_url'])
+        st.session_state.llm.set_repo(st.session_state.repo_url)
     except:
-        st.session_state["messages"].append(f'#### System:\nFailed to fetch "https://github.com/{author}/{name}.git"\n')
+        create_message(f'Failed to fetch "https://github.com/{author}/{name}.git"', 'System}')
         reset_repo_info()
         return
-    st.session_state["messages"].append(f'#### System:\nRepo loaded successfully\n')
+    create_message('Repo loaded successfully', 'System')
 
-with st.sidebar:
+def init_session_state():
+    
+    st.set_page_config(layout="wide")
+    
+    DEFAULTS = {
+        'cost': 0,
+        'messages': [],
+        'repo_url': None,
+        'repo_author': None,
+        'repo_name': None,
+        'access_key': None
+    }
 
-    st.write("## Set Access Key")
-    if model.has_key:
-        with st.expander("Change Access Key"):
+    for key, default_value in DEFAULTS.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+
+    if 'llm' not in st.session_state:
+        st.session_state.llm = LLM(ask_for_confirmation=False)
+
+    st.session_state.llm = st.session_state.llm
+
+def init_sidebar():
+
+    with st.sidebar:
+
+        st.write("## Set Access Key")
+        if st.session_state.llm.has_key:
+            with st.expander("Change Access Key"):
+                access_key = st.text_input("Access Key", type="password")
+                if st.button("Submit"):
+                    if access_key != '':
+                        st.session_state.llm.set_api_key(access_key)
+                        create_message(f'Access Key Changed Successfully', 'System')
+        else:
             access_key = st.text_input("Access Key", type="password")
             if st.button("Submit"):
                 if access_key != '':
-                    model.set_api_key(access_key)
-                    st.session_state["messages"].append(f'#### System:\nAccess Key Changed Successfully\n')
+                    st.session_state.llm.set_api_key(access_key)
+                    create_message(f'Access Key Set Successfully', 'System')
+        
+        if st.session_state.repo_url is None:
+            st.write("## Set Repository")
+        else:
+            st.write("## Repository")
+            st.write(f'{st.session_state.repo_author}/{st.session_state.repo_name}')
+            st.write("## Change Repository")
+        with st.expander("Set Repo by URL"):
+            repo_url = st.text_input("Repository URL", value="")
+            if st.button("Load", key='load_by_url'):
+                get_repo(url=repo_url)
+        with st.expander("Set Repo by Author and Name"):
+            repo_author = st.text_input("Repository Author", value="")
+            repo_name = st.text_input("Repository Name", value="")
+            if st.button("Load", key='load_by_author_name'):
+                get_repo(author=repo_author, name=repo_name)
+        
+        st.write("## Set LLM Model")
+        model_name = st.selectbox("Model", ["GPT-3.5", "GPT-4"], index=0)
+        st.session_state.llm.set_main_model(model_name)
+
+        st.write('## Estimated Cost')
+        st.write(f'${st.session_state.llm.get_running_cost():.2f} USD')
+
+def init_main():
+
+    if st.session_state.repo_url is None:
+        st.title('Repository Aware Code LLM', help='Enter an OpenAI API Key and Select a Repository to Load')
     else:
-        access_key = st.text_input("Access Key", type="password")
-        if st.button("Submit"):
-            if access_key != '':
-                model.set_api_key(access_key)
-                st.session_state["messages"].append(f'#### System:\nAccess Key Set Successfully\n')
-    
-    if st.session_state['repo_url'] is None:
-        st.write("## Set Repository")
-    else:
-        st.write("## Repository")
-        st.write(f'{st.session_state["repo_author"]}/{st.session_state["repo_name"]}')
-        st.write("## Change Repository")
-    with st.expander("Set Repo by URL"):
-        repo_url = st.text_input("Repository URL", value="")
-        if st.button("Load", key='load_by_url'):
-            get_repo(url=repo_url)
-    with st.expander("Set Repo by Author and Name"):
-        repo_author = st.text_input("Repository Author", value="")
-        repo_name = st.text_input("Repository Name", value="")
-        if st.button("Load", key='load_by_author_name'):
-            get_repo(author=repo_author, name=repo_name)
-    
-    st.write("## Set LLM Model")
-    model_name = model_name = st.selectbox("Model", ["GPT-3.5", "GPT-4"], index=0)
-    model.set_main_model(model_name)
+        st.title(f'Repository Aware Code LLM', help=f'Repository: {st.session_state.repo_author}/{st.session_state.repo_name}')
 
-    st.write('## Estimated Cost')
-    st.write(f'${model.get_running_cost():.2f} USD')
+    for item in st.session_state.messages:
+        st.write(item)
 
-if st.session_state['repo_url'] is None:
-    st.title('Repository Aware Code LLM', help='Select a Repository to Load')
-else:
-    st.title(f'Repository Aware Code LLM', help=f'Repository: {st.session_state["repo_author"]}/{st.session_state["repo_name"]}')
+    st.text_input("Input", key="text", on_change=process_text)
 
-for item in st.session_state["messages"]:
-    st.write(item)
-
-input = st.text_input("Input", key="text", on_change=process_text)
-
-
+init_session_state()
+init_sidebar()
+init_main()
