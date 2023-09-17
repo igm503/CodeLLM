@@ -5,6 +5,10 @@ WORKDIR /app
 COPY requirements.txt ./
 COPY install-treesitter.py ./
 COPY tree-sitter-python/ ./tree-sitter-python/
+COPY llm.py ./
+COPY app.py ./
+
+COPY data ./data
 
 RUN pip install tree-sitter
 RUN python install-treesitter.py
