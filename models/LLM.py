@@ -1,8 +1,11 @@
+import json
+
 import openai
 import tiktoken
+import pandas as pd
 
-
-from .constants import ChatModel, MODEL_INPUT_PRICE, MODEL_OUTPUT_PRICE
+from .Embedder import RepoEmbedder
+from .constants import ChatModel
 from .prompts import (
     FILTER_PROMPT_SYSTEM,
     FILTER_PROMPT_USER,
@@ -11,7 +14,6 @@ from .prompts import (
     FILTER_PROMPT_CODE_BLOCKS,
     MAIN_PROMPT_SYSTEM,
 )
-from .Embedder import RepoEmbedder
 
 
 class LLM:
@@ -19,91 +21,64 @@ class LLM:
         self,
         filter_with_llm=False,
         model=ChatModel.GPT_3_5_TURBO_0125,
-        need_confirmation=True,
     ):
         self.main_model = model
         self.filter_with_llm = filter_with_llm
         self.filter_model = ChatModel.GPT_3_5_TURBO_0125
-        self.running_cost = 0
         self.has_key = False
         self.repo_embeddings = None
-        self.need_confirmation = need_confirmation
 
-    def set_api_key(self, api_key):
+    def set_api_key(self, api_key: str):
         openai.api_key = api_key
         self.has_key = True
 
-    def set_main_model(self, model_name):
-        if "GPT-3.5" in model_name:
-            self.main_model = ChatModel.GPT_3_5_TURBO_0125
-        elif "GPT-4" in model_name:
-            self.main_model = ChatModel.GPT_4
-        else:
-            self.main_model = ChatModel.GPT_3_5_TURBO_0125
+    def set_main_model(self, model_name: str):
+        self.main_model = model_name
 
-    def set_repo(self, repo_url):
+    def set_repo(self, repo_url: str):
         self.repo_url = repo_url
         self.repo_name = repo_url.split("/")[-1].split(".")[0]
-        self.repo_author = repo_url.split("/")[-2]
+        author = repo_url.split("/")[-2]
 
-        self.repo_embeddings = RepoEmbedder(repo_url, self.repo_name)
+        self.repo_embeddings = RepoEmbedder(repo_url, f"{author}_{self.repo_name}")
 
-    def ask(self, question):
-        assert self.repo_embeddings is not None, "No repository set"
+    def ask(self, question: str):
+        messages = self.get_messages(question, self.filter_with_llm)
+        completion = openai.ChatCompletion.create(
+            model=self.main_model,
+            messages=messages,
+        )
+        response = completion.choices[0].message.content
+        num_input_tokens = completion.usage.prompt_tokens
+        num_output_tokens = completion.usage.completion_tokens
+        return response, num_input_tokens, num_output_tokens
+
+    def get_messages(self, question: str, filter: bool = False):
+        assert self.repo_embeddings is not None, "no repository set"
         candidates = self.repo_embeddings.search_repo(question)
-
-        if self.filter_with_llm:
+        if filter:
             ### Currently not as helpful ###
             candidates = self.filter_candidates(candidates, question)
-            if candidates is None:
-                return "No relevant code blocks found"
+        return self.generate_main_input(candidates, question)
 
-        messages = self.generate_main_input(candidates, question)
-        price_estimate = self.estimate_price(messages, self.main_model)
-        if self.need_confirmation:
-            confirm = input(f"Ask for an estimated cost of {price_estimate}? (y/n)")
-            if confirm != "y":
-                print("Request not submitted")
-                return
-        self.running_cost += price_estimate
-        response = openai.ChatCompletion.create(
-            model=self.main_model, messages=messages
-        )
-        self.running_cost += self.estimate_price(
-            [response["choices"][0]["message"]], self.main_model, output=True
-        )
-        return response["choices"][0]["message"]["content"]
-
-    def filter_candidates(self, candidates, prompt):
+    def filter_candidates(self, candidates: pd.DataFrame, prompt: str) -> pd.DataFrame:
         filter_prompt = self.generate_filter_input(candidates, prompt)
-        price_estimate = self.estimate_price(filter_prompt, self.filter_model)
-        if self.need_confirmation:
-            confirm = input(
-                f"Continue with candidate filtering? \n Estimated Price: {price_estimate} (y/n)"
-            )
-            if confirm != "y":
-                print("Request not submitted")
-                return
-        self.running_cost += price_estimate
         response = openai.ChatCompletion.create(
-            model=self.filter_model, messages=filter_prompt
+            model=self.filter_model,
+            messages=filter_prompt,
         )
-        items = response["choices"][0]["message"]["content"].split("\n")
-        choices = []
-        for item in items:
-            try:
-                num = item.split(": ")[0]
-                if item.split(": ")[1] == "yes":
-                    choices.append(int(num))
-            except IndexError:
-                continue
-        self.running_cost += self.estimate_price(
-            [response["choices"][0]["message"]], self.filter_model, output=True
-        )
-        filtered_candidates = [candidates.iloc[i] for i in choices]
+        try:
+            items = json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError:
+            print("error decoding filter response")
+            return candidates
+        choices = [int(k) for k, v in items.items() if v]
+        if not choices:
+            return candidates
+        filtered_candidates = candidates.iloc[choices]
         return filtered_candidates
 
-    def generate_filter_input(self, candidates, question):
+    def generate_filter_input(self, candidates: pd.DataFrame, question: str):
         messages = [
             {
                 "role": "system",
@@ -127,7 +102,8 @@ class LLM:
         ]
         return messages
 
-    def generate_main_input(self, code_items, question):
+    def generate_main_input(self, code_items: pd.DataFrame, question: str):
+        assert self.repo_embeddings is not None, "No repository set"
         formatted_code_blocks = self.format_code(code_items)
         messages = [
             {
@@ -145,7 +121,7 @@ class LLM:
         ]
         return messages
 
-    def format_code(self, code_items):
+    def format_code(self, code_items: pd.DataFrame):
         formatted_code_blocks = ""
         for i, row in code_items.iterrows():
             block = FILTER_PROMPT_CODE_BLOCKS.format(
@@ -156,17 +132,25 @@ class LLM:
             formatted_code_blocks += block
         return formatted_code_blocks
 
-    def estimate_price(self, messages, engine, output=False):
-        encoder = tiktoken.encoding_for_model(engine)
-        tokens = []
-        for message in messages:
-            tokens += encoder.encode(message["content"])
-        if output:
-            return len(tokens) * MODEL_OUTPUT_PRICE[engine]
-        else:
-            return len(tokens) * MODEL_INPUT_PRICE[engine]
+    def get_message_length(self, question: str):
+        messages = self.get_messages(question)
+        return self.num_tokens_from_messages(messages, self.main_model)
 
-    def get_running_cost(self):
-        if self.repo_embeddings is None:
-            return self.running_cost
-        return self.running_cost + self.repo_embeddings.running_cost
+    def num_tokens_from_messages(self, messages: list[dict[str, str]], model: str):
+        try:
+            encoding = tiktoken.encoding_for_model(model)
+        except KeyError:
+            encoding = tiktoken.get_encoding("cl100k_base")
+        num_tokens = 0
+        for message in messages:
+            num_tokens += 4
+            for key, value in message.items():
+                num_tokens += len(encoding.encode(value))
+                if key == "name":
+                    num_tokens += -1
+        num_tokens += 2
+        return num_tokens
+
+    def get_repo_tokens(self):
+        assert self.repo_embeddings is not None, "No repository set"
+        return self.repo_embeddings.get_code_tokens()

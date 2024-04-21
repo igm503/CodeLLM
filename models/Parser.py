@@ -2,7 +2,8 @@ import os
 
 import pandas as pd
 from git import Repo
-from tree_sitter import Parser
+from git.objects.tree import Tree
+from tree_sitter import Parser, Node
 
 from .constants import PY_LANGUAGE
 
@@ -22,7 +23,7 @@ class RepoParser:
 
         self.dir_tree = self.create_tree(self.repo.head.commit.tree)
 
-    def create_tree(self, root, level=0):
+    def create_tree(self, root: Tree, level: int = 0) -> str:
         tree_string = ""
         for entry in root:
             tree_string += f"{entry.path}, {entry.type}\n"
@@ -52,8 +53,8 @@ class RepoParser:
         return self.code
 
     def get_file_paths(self):
-        paths = []
-        rel_paths = []
+        paths: list[str] = []
+        rel_paths: list[str] = []
         for root, _, files in os.walk(self.repo_path):
             for file in files:
                 if file.endswith(".py"):
@@ -71,10 +72,10 @@ class RepoParser:
     def extract_blocks_from_code(self, code: str):
         tree = self.parser.parse(bytes(code, "utf-8"))
 
-        blocks = []
+        blocks: list[str] = []
         last_end_byte = 0
 
-        def find_blocks(node):
+        def find_blocks(node: Node):
             nonlocal last_end_byte
             nonlocal blocks
             if node.type == "function_definition":

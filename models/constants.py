@@ -17,7 +17,7 @@ class EmbeddingModel:
     EMBEDDING_3_LARGE = "text-embedding-3-large"
 
 
-MODEL_INPUT_PRICE = {
+MODEL_INPUT_COST = {
     EmbeddingModel.EMBEDDING_ADA: 0.1 / NUM_TOKENS,
     EmbeddingModel.EMBEDDING_3_SMALL: 0.02 / NUM_TOKENS,
     EmbeddingModel.EMBEDDING_3_LARGE: 0.13 / NUM_TOKENS,
@@ -27,7 +27,7 @@ MODEL_INPUT_PRICE = {
     ChatModel.GPT_3_5_TURBO_INSTRUCT: 1.5 / NUM_TOKENS,
 }
 
-MODEL_OUTPUT_PRICE = {
+MODEL_OUTPUT_COST = {
     ChatModel.GPT_4: 60.0 / NUM_TOKENS,
     ChatModel.GPT_4_32K: 120.0 / NUM_TOKENS,
     ChatModel.GPT_3_5_TURBO_0125: 1.5 / NUM_TOKENS,
