@@ -10,7 +10,7 @@ You can try it out here: https://code-llm-server-icuu5twmmq-uc.a.run.app/
 - ChatGPT can consider your entire codebase when responding!
 
 ## How the system works
-After you add an OpenAI API key and specify a github repo, the program will clone the repo to the 'data/' directory, parse the python files for class and function definitions and generates embeddings for each of the code blocks. When you ask a question about the codebase, your question will be turned into an embedding, and code blocks whose embeddings are similar to your question's embedding will be sent, along with your question, to an OpenAI LLM.
+After you add an OpenAI API key and specify a github repo, the program will clone the repo to the 'repos/' directory, parse the python files for class and function definitions and generates embeddings for each of the code blocks. When you ask a question about the codebase, your question will be turned into an embedding, and code blocks whose embeddings are similar to your question's embedding will be sent, along with your question, to an OpenAI LLM.
 
 ## Getting Started
 
@@ -32,7 +32,7 @@ pip install -r requirements.txt
 ```
 - Build the Python parser:
 ```
-python install-treesitter.py
+python tree-sitter/install-treesitter.py
 ```
 - You're now ready to start up the Streamlit application. Run the following command:
 ```
@@ -44,12 +44,14 @@ The app will be available at http://localhost:8502.
 
 To build and then run the docker image, run the run_docker.sh script:
 ```
-./run_dockerh.sh
+./scripts/run_docker.sh
 ```
 If you can't run the file, give it executable permissions:
 ```
 chmod +x run_docker.sh
 ```
+In a web browser, navigate to the url http://localhost:8080
+
 ## To Do
 
 - Add support for languages other than Python
@@ -57,7 +59,7 @@ chmod +x run_docker.sh
 - Increase the number of embeddings retrieved when using LLM filtering step
 - Generate dependency tree for functions and provide that info to LLM model
 - Include doc files (e.g. Readme.md) in the embeddings
-- Use OpenAi’s functions feature to allow the model to request more information
+- Use OpenAI’s functions feature to allow the model to request more information
 - Allow user to see the estimated cost of generating embeddings for a new repo before they confirm
 
 ## Community Contributions
