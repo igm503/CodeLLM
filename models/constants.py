@@ -1,6 +1,3 @@
-from tree_sitter import Language
-
-
 NUM_TOKENS = 1_000_000
 
 
@@ -34,6 +31,9 @@ MODEL_OUTPUT_COST = {
     ChatModel.GPT_3_5_TURBO_INSTRUCT: 2.0 / NUM_TOKENS,
 }
 
-ENDINGS = [".py"]
-
-PY_LANGUAGE = Language("tree-sitter/build/my-languages.so", "python")
+LANGUAGES = {
+    "java": "java",
+    "py": "python",
+    "c": "c",
+    "h": "c",
+}

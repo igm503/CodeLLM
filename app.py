@@ -16,7 +16,6 @@ def init_session_state():
     st.set_page_config(layout="wide")
 
     DEFAULTS = {
-        "cost": 0,
         "messages": [],
         "repo_url": None,
         "repo_author": None,
@@ -136,6 +135,7 @@ def model_selection():
         "GPT-4": ChatModel.GPT_4,
     }
     try:
+        assert model_name is not None
         st.session_state.llm.set_main_model(model_map[model_name])
         st.session_state.cost.set_main_model(model_map[model_name])
     except KeyError:

@@ -3,9 +3,8 @@ import os
 import pandas as pd
 from git import Repo
 from git.objects.tree import Tree
-from tree_sitter import Parser, Node
-
-from .constants import PY_LANGUAGE
+from tree_sitter import Node
+from tree_sitter_languages import get_parser
 
 
 class RepoParser:
@@ -18,8 +17,7 @@ class RepoParser:
         else:
             self.repo = Repo.clone_from(repo_url, self.repo_path)
 
-        self.parser = Parser()
-        self.parser.set_language(PY_LANGUAGE)
+        self.parser = get_parser("python")
 
         self.dir_tree = self.create_tree(self.repo.head.commit.tree)
 

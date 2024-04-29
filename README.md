@@ -19,20 +19,12 @@ After you add an OpenAI API key and specify a github repo, the program will clon
 git clone https://github.com/igm503/CodeLLM.git
 cd CodeLLM
 ```
-- Initialize Tree-Sitter-Python submodule
-```
-git submodule update --init
-```
 
 ### Run Directly with Streamlit 
 
 - Install the project dependencies:
 ```
 pip install -r requirements.txt
-```
-- Build the Python parser:
-```
-python tree-sitter/install-treesitter.py
 ```
 - You're now ready to start up the Streamlit application. Run the following command:
 ```
